@@ -65,11 +65,11 @@ AddEventHandler('koe_towing:plateCheck', function(plate, currentPlate, payout)
         --         towing.addMoney(payout)
         --     end
         -- end)
-        -- TriggerEvent('esx_addonaccount:getSharedAccount', 'society_police', function(police)
-        --     if police then
-        --         police.addMoney(payout)
-        --     end
-        -- end)
+        TriggerEvent('esx_addonaccount:getSharedAccount', 'society_police', function(police)
+            if police then
+                police.addMoney(payout)
+            end
+        end)
         -- xPlayer.addInventoryItem('money', payout - cut)
         xPlayer.addInventoryItem('money', payout)
         TriggerClientEvent('koe_towing:deleteVehicle', src)

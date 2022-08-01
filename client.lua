@@ -186,7 +186,7 @@ exports.qtarget:AddTargetBone({'bonnet'},{
 			event = "koe_towing:getVehicleInfo",
 			icon = "fa-solid fa-car",
 			label = "Tow Menu",
-            job = {['police'] = 1, ['towing'] = 0}
+            job = {['police'] = 1}
 		},
 	},
 	distance = 2
