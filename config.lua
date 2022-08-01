@@ -15,5 +15,7 @@
 
 Config = {}
 
-Config.Payout = 100
-Config.DropOffLocation = vector3(0.0, 0.0, 0.0)
+Config.minPayout = 500
+Config.maxPayout = 600
+Config.playerCut = 0.50
+Config.DropOffLocation = vector3(-239.12, -1172.4, 23.04)

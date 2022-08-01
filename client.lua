@@ -16,6 +16,9 @@ AddEventHandler('onResourceStart', function(resourceName)
 	end
 end)
 ---------------------------------------------------------------------------------------------------------------------------------------
+local onJob = false
+local inZone = false
+
 local colorNames = {
     ['0'] = "Metallic Black",
     ['1'] = "Metallic Graphite Black",
@@ -181,7 +184,7 @@ exports.qtarget:AddTargetBone({'bonnet'},{
 	options = {
 		{
 			event = "koe_towing:getVehicleInfo",
-			icon = "fas fa-box-circle-check",
+			icon = "fa-solid fa-car",
 			label = "Tow Menu",
             job = {['police'] = 1, ['towing'] = 0}
 		},
@@ -278,6 +281,9 @@ RegisterNetEvent('koe_towing:markForTowing')
 AddEventHandler('koe_towing:markForTowing', function(data)
 
     local location = data.location
+    local x = data.location.x
+    local y = data.location.y
+    local z = data.location.z
     local plate = data.plate
     local owned = data.owned
     local model = data.model
@@ -302,14 +308,7 @@ AddEventHandler('koe_towing:markForTowing', function(data)
             rot = vec3(0.0, 0.0, -1.5) 
         },
     })  then 
-            lib.notify({
-                title = 'Tow',
-                description = 'You marked this vehicle for towing.',
-                type = 'success',
-                duration = 8000,
-                position = 'top'
-            })
-            TriggerServerEvent('koe_towing:marked', location, plate, owned, model, color)
+            TriggerServerEvent('koe_towing:marked', location, plate, owned, model, color, x, y, z)
         else 
             lib.notify({
                 title = 'Tow',
@@ -331,7 +330,7 @@ exports.qtarget:AddBoxZone('towing', vector3(-192.52, -1162.68, 23.67), 1.0, 4, 
         options = {
             {
                 event = "koe_towing:getTowsClient",
-                icon = "",
+                icon = "fa-solid fa-car",
                 label = "Tow Menu",
                 job = 'towing',
             },
@@ -347,15 +346,17 @@ end)
 RegisterNetEvent('koe_towing:towsMenu')
 AddEventHandler('koe_towing:towsMenu', function(result)
     local options = {{title = 'Hover over a selection for more info'}}
-
+    
     for k, v in pairs(result) do
         table.insert(options,
             {
                 title = 'Plate', 
                 description = v.plate, 
-                args = {selectedPlate = v.plate, selectedCoords = v.coords, selectedOwned = v.owned, selectedModel = v.model, selectedColor = v.color},
-                event = 'koe_towing:selectedTow',
+                args = {selectedPlate = v.plate, selectedCoords = v.coords, selectedOwned = v.owned, selectedModel = v.model, selectedColor = v.color, payout = v.price, x = v.x, y = v.y, z = v.z},
+                event = 'koe_towing:contractMenu',
+                arrow = true,
                 metadata = {
+                    {label = 'Payout', value = v.price},
                     {label = 'Owned', value = v.owned},
                     {label = 'Model', value = v.model},
                     {label = 'Color', value = v.color},
@@ -385,15 +386,183 @@ AddEventHandler('koe_towing:towsMenu', function(result)
 
 end)
 
-RegisterNetEvent('koe_towing:selectedTow')
-AddEventHandler('koe_towing:selectedTow', function(data)
-    print(data.selectedCoords, data.selectedPlate)
+RegisterNetEvent('koe_towing:contractMenu')
+AddEventHandler('koe_towing:contractMenu', function(data)
+
+    lib.registerContext({
+        id = 'contractMenu',
+        title = 'Conctract Options',
+        menu = 'cars',
+        options = {
+            {
+                title = 'Accept Contract',
+                arrow = true,
+                event = 'koe_towing:selectedTow',
+                args = {selectedPlate = data.selectedPlate, selectedCoords = data.selectedCoords, selectedOwned = data.selectedOwned, selectedModel = data.selectedModel, selectedColor = data.selectedColor, payout = data.payout, coords = data.coords, x = data.x, y = data.y, z = data.z},
+            },
+            {
+                title = 'Remove Contract',
+                arrow = true,
+                event = 'koe_towing:remove',
+                args = {selectedPlate = data.selectedPlate, selectedCoords = data.selectedCoords, selectedOwned = data.selectedOwned, selectedModel = data.selectedModel, selectedColor = data.selectedColor, payout = data.payout, coords = data.coords, x = data.x, y = data.y, z = data.z},
+            },
+        }
+    })
+        lib.showContext('contractMenu')
 end)
 
+RegisterNetEvent('koe_towing:remove')
+AddEventHandler('koe_towing:remove', function(data)
+    local plateToRemove = data.selectedPlate
 
+    if lib.progressBar({
+        duration = 3000,
+        label = 'Press X to Cancel',
+        useWhileDead = false,
+        canCancel = true,
+        disable = {
+            car = true,
+            move = true,
+        },
+    })  then 
+            TriggerServerEvent('koe_towing:removeContract', plateToRemove)
+            lib.notify({
+                title = 'Tow',
+                description = 'Contract Removed.',
+                type = 'success',
+                duration = 8000,
+                position = 'top'
+            })
+        else 
+            lib.notify({
+                title = 'Tow',
+                description = 'Canceled removing the contract.',
+                type = 'error',
+                duration = 8000,
+                position = 'top'
+            })
+        end
+end)
 
--------When selecting a plate, go to new menu where they can accept contract and show pay(math.random on pay amounts), or they can delete contract thus removing it from DB. GPS marker for location of car
--------Plate check when turning in the car so they cannot turn in any car they find. Does pay go to business or person.
+RegisterNetEvent('koe_towing:selectedTow')
+AddEventHandler('koe_towing:selectedTow', function(data)
+    x = data.x
+    y = data.y
+    z = data.z
+    local plate = data.selectedPlate
+    local payout = data.payout
+    
+    blip = AddBlipForCoord(x, y , z)
+    SetBlipSprite (blip, 225)
+    SetBlipDisplay(blip, 2)
+    SetBlipScale  (blip, 1.3)
+    SetBlipColour (blip, 2)
+    SetBlipAsShortRange(blip, true)
+
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentSubstringPlayerName('Marked Tow Car')
+    EndTextCommandSetBlipName(blip)
+
+    SetBlipRoute(blip,true)
+
+    if onJob == false then
+        TriggerEvent('koe_towing:beginContract', plate, payout)
+    else
+        lib.notify({
+            title = 'Tow',
+            description = 'Already on a job',
+            type = 'error',
+            duration = 8000,
+            position = 'top'
+        })
+    end
+end)
+
+RegisterNetEvent('koe_towing:beginContract')
+AddEventHandler('koe_towing:beginContract', function(plate, payout)
+    lib.notify({
+        title = 'Tow',
+        description = 'The vehicles location has been marked on your map, tow it back here for payment. The plate is '..plate,
+        type = 'inform',
+        duration = 10000,
+        position = 'top'
+    })
+
+    sphere = lib.zones.sphere({
+        coords = Config.DropOffLocation,
+        radius = 10,
+        debug = false,
+        inside = inside,
+        onEnter = onEnter,
+        plate = plate,
+        payout = payout,
+        onExit = onExit
+    })
+    
+    blip2 = AddBlipForCoord(Config.DropOffLocation)
+    SetBlipSprite (blip2, 161)
+    SetBlipDisplay(blip2, 2)
+    SetBlipScale  (blip2, 1.3)
+    SetBlipColour (blip2, 1)
+    SetBlipAsShortRange(blip2, true)
+
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentSubstringPlayerName('DROP OFF')
+    EndTextCommandSetBlipName(blip2)
+end)
+function onEnter(self)
+    lib.notify({
+        title = 'Tow',
+        description = 'Get into the vehicle then press E, unless you are already in it.',
+        type = 'inform',
+        duration = 10000,
+        position = 'top'
+    })
+end
+
+function inside(self)
+    inZone = true
+    plate = sphere.plate
+    payout = sphere.payout
+
+    if IsPedOnFoot(PlayerPedId()) == false then
+        lib.showTextUI('[E] - To turn in vehicle')
+
+        if IsControlJustReleased(0, 38) then
+            local currentCar = lib.getVehicleProperties(GetVehiclePedIsUsing(PlayerPedId()))
+            local currentPlate = currentCar.plate
+
+            if currentCar == nil then
+                lib.notify({
+                    title = 'Tow',
+                    description = 'You are not in a car....',
+                    type = 'inform',
+                    duration = 10000,
+                    position = 'top'
+                })
+            else 
+                RemoveBlip(blip)
+                RemoveBlip(blip2)
+                TriggerServerEvent('koe_towing:plateCheck',plate , currentPlate, payout)
+                sphere:remove()
+            end
+            
+        end
+    end
+end
+
+function onExit(self)
+    
+end
+
+RegisterNetEvent('koe_towing:deleteVehicle')
+AddEventHandler('koe_towing:deleteVehicle', function(plate, payout)
+
+    local currentCar = GetVehiclePedIsUsing(PlayerPedId())
+
+    ESX.Game.DeleteVehicle(currentCar)
+
+end)
 
 
 
