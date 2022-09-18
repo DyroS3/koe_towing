@@ -2,18 +2,39 @@
 ESX = nil
 
 Citizen.CreateThread(function()
-    while ESX == nil do
-        TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
-        Citizen.Wait(0)
-    end
+	while ESX == nil do
+		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
+		Citizen.Wait(0)
+	end
 end)
 
-AddEventHandler('onResourceStart', function(resourceName)
-	if (resourceName == GetCurrentResourceName()) then
-        while (ESX == nil) do Citizen.Wait(100) end        
-        Citizen.Wait(5000)
-        ESX.PlayerLoaded = true
+Citizen.CreateThread(function()
+	while ESX == nil do
+		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
+		Citizen.Wait(0)
 	end
+
+	while ESX.GetPlayerData().job == nil do
+		Citizen.Wait(100)
+	end
+
+	PlayerLoaded = true
+	ESX.PlayerData = ESX.GetPlayerData()
+end)
+
+RegisterNetEvent('esx:playerLoaded')
+AddEventHandler('esx:playerLoaded', function(xPlayer)
+	ESX.PlayerData = xPlayer
+	PlayerLoaded = true
+end)
+
+RegisterNetEvent('esx:setJob')
+AddEventHandler('esx:setJob', function(job)
+	ESX.PlayerData.job = job
+end)
+
+AddEventHandler('esx:onPlayerSpawn', function()
+    local ped = PlayerPedId()
 end)
 ---------------------------------------------------------------------------------------------------------------------------------------
 local onJob = false
@@ -186,7 +207,7 @@ exports.qtarget:AddTargetBone({'bonnet'},{
 			event = "koe_towing:getVehicleInfo",
 			icon = "fa-solid fa-car",
 			label = "Tow Menu",
-            job = {['police'] = 1}
+            job = {[Config.PoliceJob] = Config.minPoliceRank}
 		},
 	},
 	distance = 2
@@ -196,7 +217,7 @@ RegisterNetEvent('koe_towing:getVehicleInfo')
 AddEventHandler('koe_towing:getVehicleInfo', function()
     local playerPed = PlayerPedId()
     local playerCoords = GetEntityCoords(playerPed)
-    local targetVehicle = GetClosestVehicle(playerCoords, 3.0, 0 , 70)
+    local targetVehicle = GetClosestVehicle(playerCoords, 7.0, 0 , 70)
     local targetPlate = GetVehicleNumberPlateText(targetVehicle)
     local targetHash = GetEntityModel(targetVehicle)
     local targetDisplayName = GetDisplayNameFromVehicleModel(targetHash)
@@ -332,7 +353,7 @@ exports.qtarget:AddBoxZone('towing', vector3(-192.52, -1162.68, 23.67), 1.0, 4, 
                 event = "koe_towing:getTowsClient",
                 icon = "fa-solid fa-car",
                 label = "Tow Menu",
-                job = 'towing',
+                job = Config.TowJob,
             },
         },
         distance = 3.5
@@ -425,6 +446,8 @@ AddEventHandler('koe_towing:remove', function(data)
             move = true,
         },
     })  then 
+            RemoveBlip(blip)
+            RemoveBlip(blip2)
             TriggerServerEvent('koe_towing:removeContract', plateToRemove)
             lib.notify({
                 title = 'Tow',
@@ -490,7 +513,7 @@ AddEventHandler('koe_towing:beginContract', function(plate, payout)
 
     sphere = lib.zones.sphere({
         coords = Config.DropOffLocation,
-        radius = 10,
+        radius = 7,
         debug = false,
         inside = inside,
         onEnter = onEnter,
@@ -513,22 +536,24 @@ end)
 function onEnter(self)
     lib.notify({
         title = 'Tow',
-        description = 'Get into the vehicle then press E, unless you are already in it.',
+        description = 'Get into the vehicle then press G, unless you are already in it.',
         type = 'inform',
         duration = 10000,
         position = 'top'
     })
 end
 
+local paid = false
+
 function inside(self)
     inZone = true
     plate = sphere.plate
     payout = sphere.payout
 
-    if IsPedOnFoot(PlayerPedId()) == false then
-        lib.showTextUI('[E] - To turn in vehicle')
+    if IsPedOnFoot(PlayerPedId()) == false and inZone == true then
+        lib.showTextUI('[G] - To turn in vehicle')
 
-        if IsControlJustReleased(0, 38) then
+        if IsControlJustReleased(0, 58) and inZone == true then
             local currentCar = lib.getVehicleProperties(GetVehiclePedIsUsing(PlayerPedId()))
             local currentPlate = currentCar.plate
 
@@ -543,28 +568,36 @@ function inside(self)
             else 
                 RemoveBlip(blip)
                 RemoveBlip(blip2)
-                TriggerServerEvent('koe_towing:plateCheck',plate , currentPlate, payout)
-                sphere:remove()
+                if paid == false then
+                    paid = true
+                    Citizen.Wait(200)
+                    TriggerServerEvent('koe_towing:plateCheck',plate , currentPlate, payout)
+                end
             end
-            
+            inZone = false
         end
     end
 end
 
 function onExit(self)
-    
+    inZone = false
 end
 
 RegisterNetEvent('koe_towing:deleteVehicle')
 AddEventHandler('koe_towing:deleteVehicle', function(plate, payout)
-
+    Citizen.Wait(500)
     local currentCar = GetVehiclePedIsUsing(PlayerPedId())
 
     ESX.Game.DeleteVehicle(currentCar)
-
+    sphere:remove()
+    paid = false
 end)
 
-
+RegisterCommand('contracts', function(source, args, rawCommand)
+    if ESX.PlayerData.job.name == 'towing' then
+        TriggerEvent('koe_towing:getTowsClient')
+    end    
+end)
 
 
 
